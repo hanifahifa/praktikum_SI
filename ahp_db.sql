@@ -1,268 +1,333 @@
-<?php
-// FILE: ahp_result_summary.php (Fixed: Replace ID 1 Logic)
-session_start();
+-- phpMyAdmin SQL Dump
+-- version 5.2.0
+-- https://www.phpmyadmin.net/
+--
+-- Host: localhost:3306
+-- Generation Time: Dec 16, 2025 at 05:25 AM
+-- Server version: 8.0.30
+-- PHP Version: 8.3.13
 
-// Cek akses Admin
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    // header("Location: login.php"); 
-    // exit();
-}
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
 
-include 'ahp_core.php';
 
-// ============================================================
-// 1. LOGIKA REGISTRASI DM BARU
-// ============================================================
-$message_regist = "";
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_add_dm'])) {
-    $nama_baru  = trim($_POST['nama']);
-    $email_baru = trim($_POST['email']);
-    $role_baru  = trim($_POST['role']);
-    $pass_plain = trim($_POST['password']);
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
 
-    if (!empty($nama_baru) && !empty($email_baru) && !empty($pass_plain)) {
-        $cek = $conn->prepare("SELECT id FROM decision_makers WHERE email = ?");
-        $cek->bind_param("s", $email_baru);
-        $cek->execute(); 
-        if ($cek->get_result()->num_rows > 0) {
-            $message_regist = "<div class='alert-error'>❌ Email sudah terdaftar!</div>";
-        } else {
-            $hash = password_hash($pass_plain, PASSWORD_DEFAULT);
-            $q_max = $conn->query("SELECT MAX(dm_number) as mx FROM decision_makers");
-            $next_num = ($q_max->fetch_assoc()['mx'] ?? 0) + 1;
-            
-            $stmt = $conn->prepare("INSERT INTO decision_makers (email, nama, password, dm_number, role_label) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("sssis", $email_baru, $nama_baru, $hash, $next_num, $role_baru);
-            if ($stmt->execute()) $message_regist = "<div class='alert-success'>✅ User <b>$nama_baru</b> berhasil dibuat.</div>";
-            else $message_regist = "<div class='alert-error'>❌ Gagal: " . $stmt->error . "</div>";
-        }
-    }
-}
+--
+-- Database: `ahp_db`
+--
 
-// ============================================================
-// 2. LOGIKA SIMPAN KONSENSUS (REPLACE ID 1)
-// ============================================================
-$message_consensus = "";
+-- --------------------------------------------------------
 
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['btn_save_consensus'])) {
-    
-    // Daftar tabel dan level yang akan diproses
-    $tasks = [
-        'kriteria'     => ['pattern' => 'kriteria_dm_%', 'table' => 'ahp_weights_kriteria',     'size' => 3, 'admin_level_name' => 'kriteria_dm_1'],
-        'minat_bakat'  => ['pattern' => 'minat_dm_%',    'table' => 'ahp_weights_minat_bakat',  'size' => 4, 'admin_level_name' => 'minat_dm_1'],
-        'tema_skripsi' => ['pattern' => 'tema_dm_%',     'table' => 'ahp_weights_tema_skripsi', 'size' => 4, 'admin_level_name' => 'tema_dm_1'],
-        'pekerjaan'    => ['pattern' => 'pekerjaan_dm_%','table' => 'ahp_weights_pekerjaan',   'size' => 4, 'admin_level_name' => 'pekerjaan_dm_1']
-    ];
+--
+-- Table structure for table `ahp_input_matrices`
+--
 
-    $success_count = 0;
+CREATE TABLE `ahp_input_matrices` (
+  `id` int NOT NULL,
+  `level_name` varchar(50) NOT NULL,
+  `input_matrix` json NOT NULL,
+  `last_updated` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-    foreach ($tasks as $key => $task) {
-        // A. Hitung Matriks Gabungan (Geometric Mean)
-        $gdss_matrix = calculate_gdss_matrix($task['pattern']);
-        
-        if ($gdss_matrix) {
-            // B. Hitung Bobot AHP
-            $ir = $IR_MAP[$task['size']] ?? 0.90;
-            $res = calculate_ahp($gdss_matrix, $ir);
-            
-            $w = $res['weights'];
-            $cr = $res['CR'];
-            $is_consistent = ($cr <= 0.1) ? 1 : 0;
-            
-            // C. UPDATE DATA DI ID 1 (TABEL WEIGHTS)
-            // Cek dulu baris ID 1 ada atau tidak?
-            $check_id1 = $conn->query("SELECT id, input_matrix_id FROM {$task['table']} WHERE id = 1");
-            
-            $input_matrix_id_target = 0;
+--
+-- Dumping data for table `ahp_input_matrices`
+--
 
-            // Variabel dinamis untuk kolom
-            $suffix = substr($task['table'], 12); // misal 'kriteria'
-            $col_cr = "cr_" . $suffix;
-            $cols = array_keys($w);
-            
-            // Siapkan Values untuk Binding
-            $bind_params = [];
-            $bind_types = "";
-            $set_part = "";
+INSERT INTO `ahp_input_matrices` (`id`, `level_name`, `input_matrix`, `last_updated`) VALUES
+(1, 'kriteria', '{\"pekerjaan\": {\"pekerjaan\": 1, \"minat_bakat\": 0.2554364774645177, \"tema_skripsi\": 0.43679023236814946}, \"minat_bakat\": {\"pekerjaan\": 3.914867641168863, \"minat_bakat\": 1, \"tema_skripsi\": 2.2894284851066637}, \"tema_skripsi\": {\"pekerjaan\": 2.2894284851066637, \"minat_bakat\": 0.43679023236814946, \"tema_skripsi\": 1}}', '2025-12-16 05:23:30'),
+(2, 'minat_bakat', '{\"membaca\": {\"membaca\": 1, \"menulis\": 0.5, \"menggambar\": 0.3333333333333333, \"menghitung\": 0.2}, \"menulis\": {\"membaca\": 2, \"menulis\": 1, \"menggambar\": 0.3333333333333333, \"menghitung\": 0.25}, \"menggambar\": {\"membaca\": 3, \"menulis\": 3, \"menggambar\": 1, \"menghitung\": 0.25}, \"menghitung\": {\"membaca\": 5, \"menulis\": 4, \"menggambar\": 4, \"menghitung\": 1}}', '2025-12-10 18:12:52'),
+(3, 'tema_skripsi', '{\"si\": {\"si\": 1, \"game\": 0.3333333333333333, \"algoritma\": 0.25, \"media_pembelajaran\": 3}, \"game\": {\"si\": 3, \"game\": 1, \"algoritma\": 0.3333333333333333, \"media_pembelajaran\": 3.5}, \"algoritma\": {\"si\": 4, \"game\": 3, \"algoritma\": 1, \"media_pembelajaran\": 4}, \"media_pembelajaran\": {\"si\": 0.3333333333333333, \"game\": 0.2857142857142857, \"algoritma\": 0.25, \"media_pembelajaran\": 1}}', '2025-12-10 18:12:03'),
+(4, 'pekerjaan', '{\"admin\": {\"admin\": 1, \"animator\": 0.2, \"wirausaha\": 0.3333333333333333, \"programmer\": 0.2}, \"animator\": {\"admin\": 5, \"animator\": 1, \"wirausaha\": 3, \"programmer\": 0.2857142857142857}, \"wirausaha\": {\"admin\": 3, \"animator\": 0.3333333333333333, \"wirausaha\": 1, \"programmer\": 0.2}, \"programmer\": {\"admin\": 5, \"animator\": 3.5, \"wirausaha\": 5, \"programmer\": 1}}', '2025-12-10 18:11:09'),
+(5, 'kriteria_dm_4', '{\"pekerjaan\": {\"pekerjaan\": 1, \"minat_bakat\": 0.3333333333333333, \"tema_skripsi\": 0.5}, \"minat_bakat\": {\"pekerjaan\": 3, \"minat_bakat\": 1, \"tema_skripsi\": 2}, \"tema_skripsi\": {\"pekerjaan\": 2, \"minat_bakat\": 0.5, \"tema_skripsi\": 1}}', '2025-12-16 05:10:22'),
+(6, 'kriteria_dm_5', '{\"pekerjaan\": {\"pekerjaan\": 1, \"minat_bakat\": 0.2, \"tema_skripsi\": 0.3333333333333333}, \"minat_bakat\": {\"pekerjaan\": 5, \"minat_bakat\": 1, \"tema_skripsi\": 2}, \"tema_skripsi\": {\"pekerjaan\": 3, \"minat_bakat\": 0.5, \"tema_skripsi\": 1}}', '2025-12-16 05:10:43'),
+(7, 'kriteria_dm_6', '{\"pekerjaan\": {\"pekerjaan\": 1, \"minat_bakat\": 0.25, \"tema_skripsi\": 0.5}, \"minat_bakat\": {\"pekerjaan\": 4, \"minat_bakat\": 1, \"tema_skripsi\": 3}, \"tema_skripsi\": {\"pekerjaan\": 2, \"minat_bakat\": 0.3333333333333333, \"tema_skripsi\": 1}}', '2025-12-16 05:08:47'),
+(8, 'kriteria_dm_1', '{\"pekerjaan\": {\"pekerjaan\": 1, \"minat_bakat\": 0.2554364774645177, \"tema_skripsi\": 0.43679023236814946}, \"minat_bakat\": {\"pekerjaan\": 3.914867641168863, \"minat_bakat\": 1, \"tema_skripsi\": 2.2894284851066637}, \"tema_skripsi\": {\"pekerjaan\": 2.2894284851066637, \"minat_bakat\": 0.43679023236814946, \"tema_skripsi\": 1}}', '2025-12-16 05:20:27');
 
-            foreach ($cols as $c) {
-                $set_part .= "$c=?, ";
-                $bind_types .= "d";
-                $bind_params[] = $w[$c];
-            }
-            // Tambah CR dan Is_Consistent
-            $set_part .= "$col_cr=?, is_consistent=?";
-            $bind_types .= "di";
-            $bind_params[] = $cr;
-            $bind_params[] = $is_consistent;
+-- --------------------------------------------------------
 
-            if ($check_id1 && $check_id1->num_rows > 0) {
-                // --- KASUS 1: ID 1 SUDAH ADA (LAKUKAN UPDATE / REPLACE) ---
-                $row_data = $check_id1->fetch_assoc();
-                $input_matrix_id_target = $row_data['input_matrix_id'];
-                
-                // Query Update Weights
-                $sql = "UPDATE {$task['table']} SET $set_part WHERE id = 1";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param($bind_types, ...$bind_params);
-                if ($stmt->execute()) {
-                    $success_count++;
-                }
-                
-                // Update juga Matriks Input-nya agar sinkron
-                if ($input_matrix_id_target > 0) {
-                    $json_matrix = json_encode($gdss_matrix);
-                    $stmt_m = $conn->prepare("UPDATE ahp_input_matrices SET input_matrix = ?, last_updated = NOW() WHERE id = ?");
-                    $stmt_m->bind_param("si", $json_matrix, $input_matrix_id_target);
-                    $stmt_m->execute();
-                }
+--
+-- Table structure for table `ahp_weights_kriteria`
+--
 
-            } else {
-                // --- KASUS 2: ID 1 BELUM ADA (BUAT BARU TAPI PAKSA ID=1 JIKA BISA) ---
-                // 1. Simpan matriks dulu
-                $input_id = save_input_matrix($task['admin_level_name'], $gdss_matrix);
-                
-                // 2. Insert Weight
-                // Kita coba insert manual dengan ID 1 jika auto increment mengizinkan, 
-                // atau biarkan auto increment jika tidak bisa maksa.
-                // Tapi user minta "replace id 1", jadi asumsi id 1 harusnya sudah ada.
-                // Jika belum ada, kita insert normal.
-                
-                $col_names = implode(', ', $cols) . ", $col_cr, is_consistent, input_matrix_id";
-                $placeholders = str_repeat('?, ', count($cols) + 2) . "?";
-                
-                $sql = "INSERT INTO {$task['table']} ($col_names) VALUES ($placeholders)";
-                $bind_types .= "i";
-                $bind_params[] = $input_id;
+CREATE TABLE `ahp_weights_kriteria` (
+  `id` int NOT NULL,
+  `input_matrix_id` int DEFAULT NULL,
+  `minat_bakat` decimal(10,8) NOT NULL,
+  `tema_skripsi` decimal(10,8) NOT NULL,
+  `pekerjaan` decimal(10,8) NOT NULL,
+  `cr_kriteria` decimal(10,8) NOT NULL,
+  `is_consistent` tinyint(1) NOT NULL,
+  `last_updated` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param($bind_types, ...$bind_params);
-                if ($stmt->execute()) {
-                    $success_count++;
-                }
-            }
-        }
-    }
-    
-    if ($success_count > 0) {
-        $message_consensus = "<div class='alert-success'>✅ <b>BERHASIL UPDATE ID 1!</b> Data Konsensus Gabungan telah menimpa data Admin (ID 1).</div>";
-    } else {
-        $message_consensus = "<div class='alert-error'>⚠️ Gagal menyimpan. Pastikan ada data input dari pakar lain.</div>";
-    }
-}
+--
+-- Dumping data for table `ahp_weights_kriteria`
+--
 
-// Konfigurasi Level Tampilan
-$levels_config = [
-    'kriteria' => ['title'=>'Kriteria Utama', 'pattern'=>'kriteria_dm_%', 'ir'=>$IR_MAP[3]??0.58],
-    'minat_bakat' => ['title'=>'Minat & Bakat', 'pattern'=>'minat_dm_%', 'ir'=>$IR_MAP[4]??0.90],
-    'tema_skripsi' => ['title'=>'Tema Skripsi', 'pattern'=>'tema_dm_%', 'ir'=>$IR_MAP[4]??0.90],
-    'pekerjaan' => ['title'=>'Pekerjaan', 'pattern'=>'pekerjaan_dm_%', 'ir'=>$IR_MAP[4]??0.90]
-];
-?>
+INSERT INTO `ahp_weights_kriteria` (`id`, `input_matrix_id`, `minat_bakat`, `tema_skripsi`, `pekerjaan`, `cr_kriteria`, `is_consistent`, `last_updated`) VALUES
+(1, 1, '0.58291847', '0.28142360', '0.13565793', '0.01068621', 1, '2025-12-16 05:23:27'),
+(2, 5, '0.53896104', '0.29725830', '0.16378066', '0.00964074', 1, '2025-12-16 05:10:22'),
+(3, 6, '0.58126362', '0.30915033', '0.10958606', '0.00424461', 1, '2025-12-16 05:10:43'),
+(4, 7, '0.62322473', '0.23948761', '0.13728766', '0.02196583', 1, '2025-12-16 05:08:47');
 
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Admin GDSS</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
-        body { font-family: 'Poppins', sans-serif; background-color: #f0f4f9; margin: 0; }
-        .container { max-width: 1000px; margin: 30px auto; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        .block-layout { border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; margin-bottom: 30px; background: white; }
-        .header-dash { background: linear-gradient(135deg, #6a05ad, #8a2be2); color: white; padding: 30px; text-align: center; border-radius: 12px; margin-bottom: 30px; }
-        .btn-consensus { background: #ff9800; color: white; border: none; padding: 15px 30px; border-radius: 30px; font-weight: bold; font-size: 16px; cursor: pointer; display: block; width: 100%; margin: 20px 0; transition: 0.3s; box-shadow: 0 4px 10px rgba(255, 152, 0, 0.3); }
-        .btn-consensus:hover { background: #e68900; transform: translateY(-2px); }
-        .alert-success { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #c3e6cb; }
-        .alert-error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #f5c6cb; }
-        .result-table { width: 100%; border-collapse: collapse; }
-        .result-table th { background: #6a05ad; color: white; padding: 12px; }
-        .result-table td { padding: 12px; border-bottom: 1px solid #eee; text-align: center; }
-        .form-control { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        .btn-add { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; }
-    </style>
-</head>
-<body>
+-- --------------------------------------------------------
 
-<div style="background: #e6e6fa; padding: 30px; text-align: center; color: #4b0082;">
-    <h1 style="margin:0;">Dashboard Admin GDSS</h1>
-    <p>Manajemen Keputusan Kelompok (Group Decision Support System)</p>
-</div>
+--
+-- Table structure for table `ahp_weights_minat_bakat`
+--
 
-<div class="container">
-    
-    <?= $message_regist ?>
-    <?= $message_consensus ?>
+CREATE TABLE `ahp_weights_minat_bakat` (
+  `id` int NOT NULL,
+  `input_matrix_id` int DEFAULT NULL,
+  `menghitung` decimal(10,8) NOT NULL,
+  `menggambar` decimal(10,8) NOT NULL,
+  `menulis` decimal(10,8) NOT NULL,
+  `membaca` decimal(10,8) NOT NULL,
+  `cr_minat_bakat` decimal(10,8) NOT NULL,
+  `is_consistent` tinyint(1) NOT NULL,
+  `last_updated` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-    <div style="background: #fff3cd; padding: 20px; border-radius: 10px; border: 1px solid #ffeeba; margin-bottom: 30px;">
-        <h3 style="margin-top:0; color:#856404;">⚠️ Update Data Admin (ID 1)</h3>
-        <p style="color:#856404;">
-            Klik tombol ini untuk menghitung rata-rata input dari semua pakar, 
-            lalu <b>menimpa (replace) data ID 1</b> di database dengan hasil perhitungan tersebut.
-        </p>
-        <form method="POST">
-            <button type="submit" name="btn_save_consensus" class="btn-consensus" onclick="return confirm('Data pada ID 1 akan ditimpa dengan hasil rata-rata pakar. Lanjutkan?')">
-                💾 UPDATE DATA ID 1 DENGAN HASIL KONSENSUS
-            </button>
-        </form>
-    </div>
+--
+-- Dumping data for table `ahp_weights_minat_bakat`
+--
 
-    <div class="header-dash">
-        <h2 style="margin:0;">Preview Hasil Gabungan (Live)</h2>
-        <p>Geometric Mean dari seluruh input Decision Maker.</p>
-    </div>
+INSERT INTO `ahp_weights_minat_bakat` (`id`, `input_matrix_id`, `menghitung`, `menggambar`, `menulis`, `membaca`, `cr_minat_bakat`, `is_consistent`, `last_updated`) VALUES
+(1, 2, '0.55481283', '0.23729947', '0.12633690', '0.08155080', '0.06384120', 1, '2025-12-10 18:12:52');
 
-    <?php foreach ($levels_config as $key => $config): ?>
-        <?php
-        $gdss_matrix = calculate_gdss_matrix($config['pattern']);
-        if ($gdss_matrix):
-            $result = calculate_ahp($gdss_matrix, $config['ir']);
-            $cr_color = ($result['CR'] <= 0.1) ? '#d4edda' : '#f8d7da';
-        ?>
-        <div class="block-layout">
-            <div style="padding: 15px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
-                <b><?= $config['title'] ?></b>
-                <span style="font-size:12px; background:#ddd; padding:2px 8px; border-radius:10px;">Geometric Mean</span>
-            </div>
-            <div style="padding: 20px;">
-                <table class="result-table">
-                    <thead><tr><th>Kriteria</th><th>Bobot</th><th>%</th></tr></thead>
-                    <tbody>
-                        <?php foreach ($result['weights'] as $k => $v): ?>
-                        <tr>
-                            <td style="text-align:left; font-weight:600;"><?= ucwords(str_replace('_',' ',$k)) ?></td>
-                            <td><?= number_format($v, 4) ?></td>
-                            <td><?= number_format($v*100, 2) ?>%</td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <div style="margin-top:10px; padding:10px; background:<?= $cr_color ?>; border-radius:5px; font-weight:bold;">
-                    CR: <?= number_format($result['CR'], 4) ?> (<?= ($result['CR']<=0.1)?'KONSISTEN':'TIDAK KONSISTEN' ?>)
-                </div>
-            </div>
-        </div>
-        <?php endif; ?>
-    <?php endforeach; ?>
+-- --------------------------------------------------------
 
-    <div class="block-layout">
-        <div style="padding: 15px; background: #4b0082; color: white;"><b>➕ Tambah User Pakar</b></div>
-        <div style="padding: 20px;">
-            <form method="POST">
-                <input type="text" name="nama" placeholder="Nama Lengkap" class="form-control" required>
-                <input type="email" name="email" placeholder="Email" class="form-control" required>
-                <input type="text" name="role" placeholder="Jabatan" class="form-control" required>
-                <input type="text" name="password" placeholder="Password" class="form-control" required>
-                <button type="submit" name="btn_add_dm" class="btn-add">Buat User</button>
-            </form>
-        </div>
-    </div>
+--
+-- Table structure for table `ahp_weights_pekerjaan`
+--
 
-    <div style="text-align: center; margin-top: 30px;">
-        <a href="login.php" style="color: #666; text-decoration: none;">Logout</a>
-    </div>
+CREATE TABLE `ahp_weights_pekerjaan` (
+  `id` int NOT NULL,
+  `input_matrix_id` int DEFAULT NULL,
+  `programmer` decimal(10,8) NOT NULL,
+  `animator` decimal(10,8) NOT NULL,
+  `wirausaha` decimal(10,8) NOT NULL,
+  `admin` decimal(10,8) NOT NULL,
+  `cr_pekerjaan` decimal(10,8) NOT NULL,
+  `is_consistent` tinyint(1) NOT NULL,
+  `last_updated` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-</div>
-</body>
-</html>
+--
+-- Dumping data for table `ahp_weights_pekerjaan`
+--
+
+INSERT INTO `ahp_weights_pekerjaan` (`id`, `input_matrix_id`, `programmer`, `animator`, `wirausaha`, `admin`, `cr_pekerjaan`, `is_consistent`, `last_updated`) VALUES
+(1, 4, '0.54536043', '0.26168461', '0.12657445', '0.06638051', '0.08839724', 1, '2025-12-10 18:11:09');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `ahp_weights_tema_skripsi`
+--
+
+CREATE TABLE `ahp_weights_tema_skripsi` (
+  `id` int NOT NULL,
+  `input_matrix_id` int DEFAULT NULL,
+  `algoritma` decimal(10,8) NOT NULL,
+  `game` decimal(10,8) NOT NULL,
+  `si` decimal(10,8) NOT NULL,
+  `media_pembelajaran` decimal(10,8) NOT NULL,
+  `cr_tema_skripsi` decimal(10,8) NOT NULL,
+  `is_consistent` tinyint(1) NOT NULL,
+  `last_updated` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `ahp_weights_tema_skripsi`
+--
+
+INSERT INTO `ahp_weights_tema_skripsi` (`id`, `input_matrix_id`, `algoritma`, `game`, `si`, `media_pembelajaran`, `cr_tema_skripsi`, `is_consistent`, `last_updated`) VALUES
+(1, 3, '0.50569129', '0.26566521', '0.14734954', '0.08129396', '0.08899587', 1, '2025-12-10 18:12:03');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `decision_makers`
+--
+
+CREATE TABLE `decision_makers` (
+  `id` int NOT NULL,
+  `email` varchar(100) NOT NULL COMMENT 'Email DM (unik)',
+  `nama` varchar(150) NOT NULL COMMENT 'Nama Decision Maker',
+  `password` varchar(255) NOT NULL COMMENT 'Password (hashed)',
+  `dm_number` int DEFAULT NULL COMMENT 'Nomor DM (1,2,3...)',
+  `role_label` varchar(100) DEFAULT NULL COMMENT 'Label peran (contoh: Kepala Sekolah, Dosen, Admin)',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `input_matrix_id` int DEFAULT NULL COMMENT 'Relasi ke ahp_input_matrices'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `decision_makers`
+--
+
+INSERT INTO `decision_makers` (`id`, `email`, `nama`, `password`, `dm_number`, `role_label`, `created_at`, `input_matrix_id`) VALUES
+(1, 'kajur@campus.ac.id', 'Bapak Kajur', '123456', 1, 'Kepala Jurusan', '2025-12-16 04:44:12', 8),
+(2, 'kabag_aa@campus.ac.id', 'Ibu Kabag AA', '123456', 2, 'Kepala Bagian Administrasi Akademik', '2025-12-16 04:44:12', NULL),
+(3, 'kabag_mhs@campus.ac.id', 'Bapak Kabag Kemahasiswaan', '123456', 3, 'Kepala Bagian Kemahasiswaan', '2025-12-16 04:44:12', NULL),
+(4, 'kajur@gmail.com', 'ifa', '$2y$10$W49wfPbAqT0DYTIYqt2DAuXxnF2oVODrOzI/c2ys6fbs1FnH0dJcO', 4, 'kajur', '2025-12-16 04:48:37', 5),
+(5, 'sekprod@gmail.com', 'kevin', '$2y$10$eR0y/xVEzz4lRBRoWPA8NenFI14UAC.xjNCZwDY3dLblkM33koVuu', 5, 'sekprod', '2025-12-16 05:01:34', 6),
+(6, 'dosen@gmail.com', 'rahma', '$2y$10$B6bYhljWNaZWL3ZW5GcXr.KMuSmRlRSzy2TTNLdFrjRksEpfXfQYK', 6, 'dosen', '2025-12-16 05:08:19', 7);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `users`
+--
+
+CREATE TABLE `users` (
+  `email` varchar(100) NOT NULL COMMENT 'Email pengguna, dijadikan Primary Key',
+  `nama` varchar(150) NOT NULL COMMENT 'Nama lengkap pengguna',
+  `password` varchar(255) NOT NULL COMMENT 'Password yang di-hash (disarankan menggunakan minimal 60 karakter)',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `users`
+--
+
+INSERT INTO `users` (`email`, `nama`, `password`, `created_at`) VALUES
+('ifa@gmail.com', 'hanifah', 'ifalocal123', '2025-12-11 12:08:45'),
+('kevin@gmail.com', 'Kevin', '$2y$10$WdW/d2VpdHRt78cmOMobk.A/uSvJfHvF93ORXh2j1s61GuskOVFa.', '2025-12-10 18:31:37');
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `ahp_input_matrices`
+--
+ALTER TABLE `ahp_input_matrices`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `level_name` (`level_name`);
+
+--
+-- Indexes for table `ahp_weights_kriteria`
+--
+ALTER TABLE `ahp_weights_kriteria`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `input_matrix_id` (`input_matrix_id`);
+
+--
+-- Indexes for table `ahp_weights_minat_bakat`
+--
+ALTER TABLE `ahp_weights_minat_bakat`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `input_matrix_id` (`input_matrix_id`);
+
+--
+-- Indexes for table `ahp_weights_pekerjaan`
+--
+ALTER TABLE `ahp_weights_pekerjaan`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `input_matrix_id` (`input_matrix_id`);
+
+--
+-- Indexes for table `ahp_weights_tema_skripsi`
+--
+ALTER TABLE `ahp_weights_tema_skripsi`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `input_matrix_id` (`input_matrix_id`);
+
+--
+-- Indexes for table `decision_makers`
+--
+ALTER TABLE `decision_makers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `email` (`email`),
+  ADD KEY `fk_dm_input_matrix` (`input_matrix_id`);
+
+--
+-- Indexes for table `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`email`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `ahp_input_matrices`
+--
+ALTER TABLE `ahp_input_matrices`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
+-- AUTO_INCREMENT for table `ahp_weights_kriteria`
+--
+ALTER TABLE `ahp_weights_kriteria`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
+-- AUTO_INCREMENT for table `ahp_weights_minat_bakat`
+--
+ALTER TABLE `ahp_weights_minat_bakat`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `ahp_weights_pekerjaan`
+--
+ALTER TABLE `ahp_weights_pekerjaan`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `ahp_weights_tema_skripsi`
+--
+ALTER TABLE `ahp_weights_tema_skripsi`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `decision_makers`
+--
+ALTER TABLE `decision_makers`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `ahp_weights_kriteria`
+--
+ALTER TABLE `ahp_weights_kriteria`
+  ADD CONSTRAINT `ahp_weights_kriteria_ibfk_1` FOREIGN KEY (`input_matrix_id`) REFERENCES `ahp_input_matrices` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `ahp_weights_minat_bakat`
+--
+ALTER TABLE `ahp_weights_minat_bakat`
+  ADD CONSTRAINT `ahp_weights_minat_bakat_ibfk_1` FOREIGN KEY (`input_matrix_id`) REFERENCES `ahp_input_matrices` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `ahp_weights_pekerjaan`
+--
+ALTER TABLE `ahp_weights_pekerjaan`
+  ADD CONSTRAINT `ahp_weights_pekerjaan_ibfk_1` FOREIGN KEY (`input_matrix_id`) REFERENCES `ahp_input_matrices` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `ahp_weights_tema_skripsi`
+--
+ALTER TABLE `ahp_weights_tema_skripsi`
+  ADD CONSTRAINT `ahp_weights_tema_skripsi_ibfk_1` FOREIGN KEY (`input_matrix_id`) REFERENCES `ahp_input_matrices` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `decision_makers`
+--
+ALTER TABLE `decision_makers`
+  ADD CONSTRAINT `fk_dm_input_matrix` FOREIGN KEY (`input_matrix_id`) REFERENCES `ahp_input_matrices` (`id`) ON DELETE SET NULL;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
